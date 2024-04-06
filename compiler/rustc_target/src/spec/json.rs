@@ -7,12 +7,12 @@ use super::crt_objects::CrtObjects;
 use super::{
     BinaryFormat, CodeModel, DebuginfoKind, FloatAbi, FramePointer, LinkArgsCli,
     LinkSelfContainedComponents, LinkSelfContainedDefault, LinkerFlavorCli, LldFlavor,
-    MergeFunctions, PanicStrategy, RelocModel, RelroLevel, RustcAbi, SanitizerSet,
+    MergeFunctions, PanicStrategy, RelocModel, RelroLevel, RustcAbi,
     SmallDataThresholdSupport, SplitDebuginfo, StackProbeType, StaticCow, SymbolVisibility, Target,
     TargetKind, TargetOptions, TargetWarnings, TlsModel,
 };
 use crate::json::{Json, ToJson};
-use crate::spec::AbiMap;
+use crate::spec::{AbiMap, SanitizerSet};
 
 impl Target {
     /// Loads a target descriptor from a JSON object.
@@ -392,6 +392,7 @@ impl ToJson for Target {
         target_option_val!(split_debuginfo);
         target_option_val!(supported_split_debuginfo);
         target_option_val!(supported_sanitizers);
+        target_option_val!(stable_sanitizers);
         target_option_val!(c_enum_min_bits);
         target_option_val!(generate_arange_section);
         target_option_val!(supports_stack_protector);

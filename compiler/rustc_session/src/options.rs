@@ -116,7 +116,7 @@ mod target_modifier_consistency_check {
         r: Option<&TargetModifier>,
     ) -> bool {
         // For kCFI, the helper flag -Zsanitizer-cfi-normalize-integers should also be a target modifier
-        if opts.unstable_opts.sanitizer.contains(SanitizerSet::KCFI) {
+        if opts.cg.sanitize.contains(SanitizerSet::KCFI) {
             if let Some(r) = r {
                 return l.extend().tech_value == r.extend().tech_value;
             } else {
@@ -136,10 +136,12 @@ impl TargetModifier {
     pub fn consistent(&self, opts: &Options, other: Option<&TargetModifier>) -> bool {
         assert!(other.is_none() || self.opt == other.unwrap().opt);
         match self.opt {
-            OptionsTargetModifiers::UnstableOptions(unstable) => match unstable {
-                UnstableOptionsTargetModifiers::sanitizer => {
+            OptionsTargetModifiers::CodegenOptions(stable) => match stable {
+                CodegenOptionsTargetModifiers::sanitize => {
                     return target_modifier_consistency_check::sanitizer(self, other);
                 }
+            },
+            OptionsTargetModifiers::UnstableOptions(unstable) => match unstable {
                 UnstableOptionsTargetModifiers::sanitizer_cfi_normalize_integers => {
                     return target_modifier_consistency_check::sanitizer_cfi_normalize_integers(
                         opts, self, other,
@@ -147,7 +149,6 @@ impl TargetModifier {
                 }
                 _ => {}
             },
-            _ => {}
         };
         match other {
             Some(other) => self.extend().tech_value == other.extend().tech_value,
@@ -1239,25 +1240,14 @@ pub mod parse {
     }
 
     pub(crate) fn parse_sanitizers(slot: &mut SanitizerSet, v: Option<&str>) -> bool {
-        if let Some(v) = v {
-            for s in v.split(',') {
-                *slot |= match s {
-                    "address" => SanitizerSet::ADDRESS,
-                    "cfi" => SanitizerSet::CFI,
-                    "dataflow" => SanitizerSet::DATAFLOW,
-                    "kcfi" => SanitizerSet::KCFI,
-                    "kernel-address" => SanitizerSet::KERNELADDRESS,
-                    "leak" => SanitizerSet::LEAK,
-                    "memory" => SanitizerSet::MEMORY,
-                    "memtag" => SanitizerSet::MEMTAG,
-                    "shadow-call-stack" => SanitizerSet::SHADOWCALLSTACK,
-                    "thread" => SanitizerSet::THREAD,
-                    "hwaddress" => SanitizerSet::HWADDRESS,
-                    "safestack" => SanitizerSet::SAFESTACK,
-                    _ => return false,
-                }
+        if let Some(s) = v {
+            let sanitizer_set = SanitizerSet::from_comma_list(s);
+            if sanitizer_set.is_ok() {
+                *slot |= sanitizer_set.unwrap();
+                true
+            } else {
+                false
             }
-            true
         } else {
             false
         }
@@ -2158,8 +2148,8 @@ options! {
         "output remarks for these optimization passes (space separated, or \"all\")"),
     rpath: bool = (false, parse_bool, [UNTRACKED],
         "set rpath values in libs/exes (default: no)"),
-    save_temps: bool = (false, parse_bool, [UNTRACKED],
-        "save all temporary output files during compilation (default: no)"),
+    sanitize: SanitizerSet = (SanitizerSet::empty(), parse_sanitizers, [TRACKED TARGET_MODIFIER],
+        "use one or multiple sanitizers"),
     soft_float: bool = (false, parse_bool, [TRACKED],
         "deprecated option: use soft float ABI (*eabihf targets only) (default: no)"),
     #[rustc_lint_opt_deny_field_access("use `Session::split_debuginfo` instead of this field")]
@@ -2176,6 +2166,8 @@ options! {
         "target specific attributes. (`rustc --print target-features` for details). \
         This feature is unsafe."),
     unsafe_allow_abi_mismatch: Vec<String> = (Vec::new(), parse_comma_list, [UNTRACKED],
+        "Allow incompatible target modifiers in dependency crates (comma separated list)"),
+    save_temps: bool = (false, parse_bool, [UNTRACKED],
         "Allow incompatible target modifiers in dependency crates (comma separated list)"),
     // tidy-alphabetical-end
 
@@ -2575,8 +2567,6 @@ written to standard error output)"),
     retpoline_external_thunk: bool = (false, parse_bool, [TRACKED TARGET_MODIFIER],
         "enables retpoline-external-thunk, retpoline-indirect-branches and retpoline-indirect-calls \
         target features (default: no)"),
-    sanitizer: SanitizerSet = (SanitizerSet::empty(), parse_sanitizers, [TRACKED TARGET_MODIFIER],
-        "use a sanitizer"),
     sanitizer_cfi_canonical_jump_tables: Option<bool> = (Some(true), parse_opt_bool, [TRACKED],
         "enable canonical jump tables (default: yes)"),
     sanitizer_cfi_generalize_pointers: Option<bool> = (None, parse_opt_bool, [TRACKED],
@@ -2594,6 +2584,8 @@ written to standard error output)"),
     saturating_float_casts: Option<bool> = (None, parse_opt_bool, [TRACKED],
         "make float->int casts UB-free: numbers outside the integer type's range are clipped to \
         the max/min integer respectively, and NaN is mapped to 0 (default: yes)"),
+    sanitize: SanitizerSet = (SanitizerSet::empty(), parse_sanitizers, [TRACKED TARGET_MODIFIER],
+        "use one or multiple sanitizers"),
     self_profile: SwitchWithOptPath = (SwitchWithOptPath::Disabled,
         parse_switch_with_opt_path, [UNTRACKED],
         "run the self profiler and output the raw event data"),
